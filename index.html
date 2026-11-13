@@ -1,0 +1,1578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>ASHA-Vaani — Zero-Touch Voice Field Register</title>
+<style>
+  /* ─────────────────────────────────────────────────
+     DESIGN TOKENS
+  ───────────────────────────────────────────────── */
+  :root {
+    --primary:   #0D5C63;
+    --primary-l: #117A83;
+    --primary-xl:#E0F4F5;
+    --bg:        #F8FAFC;
+    --surface:   #FFFFFF;
+    --border:    #CBD5E1;
+    --text:      #0F172A;
+    --text-s:    #475569;
+    --danger:    #DC2626;
+    --danger-l:  #FEE2E2;
+    --success:   #16A34A;
+    --success-l: #DCFCE7;
+    --warn:      #D97706;
+    --warn-l:    #FEF3C7;
+    --pill-bg:   #0D5C63;
+    --pill-txt:  #FFFFFF;
+    --radius:    12px;
+    --shadow:    0 2px 12px rgba(13,92,99,0.12);
+    --font:      'Segoe UI', system-ui, -apple-system, sans-serif;
+  }
+
+  /* ─────────────────────────────────────────────────
+     RESET & BASE
+  ───────────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { font-size: 16px; }
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding-bottom: 80px;
+  }
+  button { cursor: pointer; border: none; outline: none; font-family: var(--font); }
+  input, select, textarea { font-family: var(--font); }
+
+  /* ─────────────────────────────────────────────────
+     TELEMETRY HEADER
+  ───────────────────────────────────────────────── */
+  .telemetry-header {
+    background: var(--primary);
+    color: #fff;
+    padding: 12px 16px 10px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+  }
+  .telemetry-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .app-title {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.1;
+  }
+  .app-title .name {
+    font-size: 1.25rem;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    color: #fff;
+  }
+  .app-title .subtitle {
+    font-size: 0.65rem;
+    color: rgba(255,255,255,0.72);
+    font-weight: 500;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+  .lang-selector {
+    background: rgba(255,255,255,0.15);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.3);
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath fill='%23fff' d='M6 8L0 0h12z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    padding-right: 24px;
+  }
+  .lang-selector option { color: #0F172A; background: #fff; }
+  .telemetry-pills {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 3px 9px;
+    border-radius: 20px;
+    letter-spacing: 0.3px;
+  }
+  .pill-latency {
+    background: rgba(255,255,255,0.18);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.35);
+  }
+  .pill-noise {
+    background: #16A34A;
+    color: #fff;
+  }
+  .pill-synth {
+    background: var(--warn);
+    color: #fff;
+  }
+  .pill-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: 0.85;
+    animation: blink 1.4s infinite;
+  }
+  @keyframes blink {
+    0%,100% { opacity: 0.85; }
+    50%      { opacity: 0.3; }
+  }
+
+  /* ─────────────────────────────────────────────────
+     MAIN LAYOUT
+  ───────────────────────────────────────────────── */
+  .container {
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 16px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  /* ─────────────────────────────────────────────────
+     SECTION CARD
+  ───────────────────────────────────────────────── */
+  .card {
+    background: var(--surface);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 16px;
+    border: 1px solid var(--border);
+  }
+  .card-title {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--primary);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .card-title .icon { font-size: 1rem; }
+
+  /* ─────────────────────────────────────────────────
+     VOICE CAPTURE SECTION
+  ───────────────────────────────────────────────── */
+  .mic-area {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+  }
+  .mic-btn {
+    width: 108px;
+    height: 108px;
+    border-radius: 50%;
+    background: var(--primary);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    box-shadow: 0 4px 20px rgba(13,92,99,0.4);
+    transition: all 0.2s;
+    border: 4px solid var(--primary-l);
+    position: relative;
+    touch-action: manipulation;
+  }
+  .mic-btn:active { transform: scale(0.95); }
+  .mic-btn.listening {
+    background: var(--danger);
+    border-color: #ef4444;
+    box-shadow: 0 0 0 0 rgba(220,38,38,0.4);
+    animation: pulse-ring 1.2s infinite;
+  }
+  @keyframes pulse-ring {
+    0%   { box-shadow: 0 0 0 0 rgba(220,38,38,0.5); }
+    70%  { box-shadow: 0 0 0 20px rgba(220,38,38,0); }
+    100% { box-shadow: 0 0 0 0 rgba(220,38,38,0); }
+  }
+  .mic-btn .mic-icon { font-size: 2.4rem; }
+  .mic-btn .mic-label {
+    font-size: 0.6rem;
+    font-weight: 700;
+    color: rgba(255,255,255,0.9);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+
+  /* Waveform */
+  .waveform-wrap {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 48px;
+  }
+  #waveCanvas {
+    width: 100%;
+    max-width: 340px;
+    height: 48px;
+    border-radius: 8px;
+    background: var(--primary-xl);
+    display: block;
+  }
+
+  /* Demo Presets */
+  .demo-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--text-s);
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    width: 100%;
+  }
+  .demo-presets {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+  }
+  .demo-btn {
+    background: var(--primary-xl);
+    color: var(--primary);
+    border: 1.5px solid var(--primary);
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-align: left;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    transition: all 0.15s;
+    line-height: 1.4;
+    touch-action: manipulation;
+  }
+  .demo-btn:active { background: var(--primary); color: #fff; }
+  .demo-btn .demo-num {
+    background: var(--primary);
+    color: #fff;
+    border-radius: 6px;
+    font-size: 0.65rem;
+    font-weight: 800;
+    padding: 2px 6px;
+    min-width: 24px;
+    text-align: center;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .demo-btn .demo-txt { flex: 1; }
+  .demo-btn .demo-title {
+    font-size: 0.7rem;
+    font-weight: 800;
+    color: var(--primary);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    display: block;
+    margin-bottom: 2px;
+  }
+  .demo-btn:active .demo-title { color: rgba(255,255,255,0.8); }
+
+  /* ─────────────────────────────────────────────────
+     TRANSCRIPT BOX
+  ───────────────────────────────────────────────── */
+  .transcript-box {
+    min-height: 90px;
+    background: #F0FAFA;
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    padding: 12px;
+    font-size: 0.88rem;
+    line-height: 1.65;
+    color: var(--text);
+    position: relative;
+    word-break: break-word;
+  }
+  .transcript-box.empty::before {
+    content: "Transcript will appear here…";
+    color: #94A3B8;
+    font-style: italic;
+    font-size: 0.82rem;
+  }
+  .transcript-box .interim { color: #94A3B8; font-style: italic; }
+  .med-pill {
+    display: inline-flex;
+    align-items: center;
+    background: var(--primary);
+    color: #fff;
+    border-radius: 20px;
+    padding: 1px 8px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    margin: 1px 2px;
+    white-space: nowrap;
+  }
+  .med-pill.danger-term {
+    background: var(--danger);
+  }
+
+  /* Barge-in bar */
+  .barge-bar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-top: 8px;
+  }
+  .btn-barge {
+    background: var(--warn);
+    color: #fff;
+    border-radius: 8px;
+    padding: 7px 14px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: opacity 0.15s;
+    touch-action: manipulation;
+  }
+  .btn-barge:disabled { opacity: 0.4; }
+  .tts-status {
+    font-size: 0.72rem;
+    color: var(--text-s);
+    font-style: italic;
+  }
+
+  /* ─────────────────────────────────────────────────
+     DANGER ALERT BANNER
+  ───────────────────────────────────────────────── */
+  .danger-alert {
+    display: none;
+    background: var(--danger-l);
+    border: 2px solid var(--danger);
+    border-radius: var(--radius);
+    padding: 14px;
+    animation: shake 0.4s ease;
+  }
+  .danger-alert.visible { display: block; }
+  @keyframes shake {
+    0%,100% { transform: translateX(0); }
+    20%      { transform: translateX(-6px); }
+    40%      { transform: translateX(6px); }
+    60%      { transform: translateX(-4px); }
+    80%      { transform: translateX(4px); }
+  }
+  .danger-alert .alert-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .danger-alert .alert-title {
+    font-size: 0.95rem;
+    font-weight: 800;
+    color: var(--danger);
+    letter-spacing: -0.2px;
+  }
+  .danger-alert .alert-body {
+    font-size: 0.82rem;
+    color: #991B1B;
+    line-height: 1.6;
+    margin-bottom: 10px;
+  }
+  .alert-keywords {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin: 6px 0;
+  }
+  .alert-kw {
+    background: var(--danger);
+    color: #fff;
+    border-radius: 20px;
+    padding: 2px 9px;
+    font-size: 0.72rem;
+    font-weight: 700;
+  }
+  .guardrail-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: #fff;
+    border: 1px solid var(--danger);
+    border-radius: 8px;
+    padding: 7px 10px;
+    font-size: 0.72rem;
+    color: #991B1B;
+    font-weight: 600;
+  }
+  .guardrail-badge .shield { font-size: 1rem; }
+  .nmh-ref {
+    font-size: 0.68rem;
+    color: #B91C1C;
+    margin-top: 6px;
+    font-style: italic;
+  }
+
+  /* ─────────────────────────────────────────────────
+     STRUCTURED FORM
+  ───────────────────────────────────────────────── */
+  .form-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .form-group.full { grid-column: 1 / -1; }
+  .form-label {
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: var(--text-s);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .form-input {
+    background: var(--bg);
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    padding: 9px 10px;
+    font-size: 0.85rem;
+    color: var(--text);
+    transition: border-color 0.15s;
+    width: 100%;
+  }
+  .form-input:focus {
+    outline: none;
+    border-color: var(--primary);
+    background: #fff;
+  }
+  .form-input.filled {
+    border-color: var(--primary);
+    background: var(--primary-xl);
+    font-weight: 600;
+  }
+  .form-select {
+    background: var(--bg);
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    padding: 9px 10px;
+    font-size: 0.85rem;
+    color: var(--text);
+    width: 100%;
+    appearance: none;
+  }
+  .form-select.filled {
+    border-color: var(--primary);
+    background: var(--primary-xl);
+    font-weight: 600;
+  }
+  .priority-badge {
+    display: none;
+    align-items: center;
+    gap: 6px;
+    background: var(--danger);
+    color: #fff;
+    border-radius: 8px;
+    padding: 7px 12px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    margin-top: 4px;
+  }
+  .priority-badge.visible { display: flex; }
+  .form-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+  }
+  .btn-primary {
+    flex: 1;
+    background: var(--primary);
+    color: #fff;
+    border-radius: 10px;
+    padding: 11px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: background 0.15s;
+    touch-action: manipulation;
+  }
+  .btn-primary:active { background: var(--primary-l); }
+  .btn-secondary {
+    flex: 1;
+    background: var(--success);
+    color: #fff;
+    border-radius: 10px;
+    padding: 11px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: background 0.15s;
+    touch-action: manipulation;
+  }
+  .btn-secondary:active { background: #15803d; }
+  .btn-clear {
+    background: var(--bg);
+    color: var(--text-s);
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    padding: 11px 14px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    touch-action: manipulation;
+  }
+
+  /* ─────────────────────────────────────────────────
+     NEXT ACTION QUEUE
+  ───────────────────────────────────────────────── */
+  .queue-list {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+  }
+  .queue-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    background: var(--bg);
+    border-radius: 9px;
+    border: 1px solid var(--border);
+    font-size: 0.82rem;
+    color: var(--text);
+  }
+  .queue-item .q-icon { font-size: 1rem; flex-shrink: 0; }
+  .queue-item .q-text { flex: 1; line-height: 1.4; }
+  .queue-item .q-badge {
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 20px;
+    white-space: nowrap;
+  }
+  .q-badge.urgent { background: var(--danger-l); color: var(--danger); }
+  .q-badge.pending { background: var(--warn-l); color: var(--warn); }
+  .q-badge.done { background: var(--success-l); color: var(--success); }
+  .q-badge.info { background: var(--primary-xl); color: var(--primary); }
+
+  /* ─────────────────────────────────────────────────
+     SAVED LOGS
+  ───────────────────────────────────────────────── */
+  .log-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 320px;
+    overflow-y: auto;
+  }
+  .log-item {
+    padding: 10px 12px;
+    border-radius: 9px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .log-item.high-priority {
+    border-color: var(--danger);
+    background: var(--danger-l);
+  }
+  .log-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 6px;
+  }
+  .log-name { font-size: 0.85rem; font-weight: 700; color: var(--text); }
+  .log-ts { font-size: 0.65rem; color: var(--text-s); }
+  .log-meta { font-size: 0.75rem; color: var(--text-s); }
+  .log-flag {
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 20px;
+    background: var(--danger);
+    color: #fff;
+    white-space: nowrap;
+  }
+  .empty-state {
+    text-align: center;
+    color: #94A3B8;
+    font-size: 0.82rem;
+    padding: 20px 0;
+    font-style: italic;
+  }
+
+  /* ─────────────────────────────────────────────────
+     TOAST
+  ───────────────────────────────────────────────── */
+  #toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: #1E293B;
+    color: #fff;
+    padding: 10px 20px;
+    border-radius: 24px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    white-space: nowrap;
+    z-index: 999;
+    transition: transform 0.3s cubic-bezier(.34,1.56,.64,1);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  }
+  #toast.show { transform: translateX(-50%) translateY(0); }
+
+  /* ─────────────────────────────────────────────────
+     SECTION DIVIDER
+  ───────────────────────────────────────────────── */
+  .section-sep {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--text-s);
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .section-sep::before,
+  .section-sep::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* ─────────────────────────────────────────────────
+     UTILITY
+  ───────────────────────────────────────────────── */
+  .hidden { display: none !important; }
+  .text-center { text-align: center; }
+  .mt-2 { margin-top: 8px; }
+  .w-full { width: 100%; }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════
+     TELEMETRY HEADER
+══════════════════════════════════════════════ -->
+<header class="telemetry-header" role="banner">
+  <div class="telemetry-top">
+    <div class="app-title">
+      <span class="name">🩺 ASHA-Vaani</span>
+      <span class="subtitle">Synthetic Data Mode · Zero-Touch Voice Register</span>
+    </div>
+    <select class="lang-selector" id="langSelector" aria-label="Language Selector" onchange="setLanguage(this.value)">
+      <option value="kn-IN">🇮🇳 Kannada + EN</option>
+      <option value="hi-IN">🇮🇳 Hindi + EN</option>
+      <option value="ta-IN">🇮🇳 Tamil + EN</option>
+    </select>
+  </div>
+  <div class="telemetry-pills">
+    <span class="pill pill-latency" id="latencyPill">
+      <span class="pill-dot"></span>Latency: <span id="latencyVal">380ms</span>
+    </span>
+    <span class="pill pill-noise">
+      <span class="pill-dot"></span>Noise Suppression: Active
+    </span>
+    <span class="pill pill-synth">
+      ⚠ Synthetic Data Mode
+    </span>
+  </div>
+</header>
+
+<!-- ══════════════════════════════════════════════
+     MAIN CONTENT
+══════════════════════════════════════════════ -->
+<main class="container" role="main">
+
+  <!-- ─── 1. VOICE CAPTURE ─── -->
+  <section class="card" aria-labelledby="voiceTitle">
+    <div class="card-title">
+      <span class="icon">🎙️</span>
+      <span id="voiceTitle">Voice Capture</span>
+    </div>
+
+    <div class="mic-area">
+      <button class="mic-btn" id="micBtn"
+              aria-label="Tap to Speak"
+              onclick="toggleMic()"
+              touch-action="manipulation">
+        <span class="mic-icon" id="micIcon">🎤</span>
+        <span class="mic-label" id="micLabel">Tap to Speak</span>
+      </button>
+
+      <div class="waveform-wrap">
+        <canvas id="waveCanvas" role="img" aria-label="Live audio waveform"></canvas>
+      </div>
+
+      <div class="demo-label">— or use demo presets for instant testing —</div>
+      <div class="demo-presets" role="group" aria-label="Demo Presets">
+
+        <button class="demo-btn" onclick="runPreset(0)" aria-label="Demo Preset 1: Normal ANC Visit">
+          <span class="demo-num">P1</span>
+          <span class="demo-txt">
+            <span class="demo-title">Normal ANC Visit</span>
+            Sunita Devi, ID ASHA-104, 7th month ANC checkup, weight 54 kilo, TT injection, IFA goli, next visit Nov 28
+          </span>
+        </button>
+
+        <button class="demo-btn" onclick="runPreset(1)" aria-label="Demo Preset 2: Voice Barge-In Correction">
+          <span class="demo-num">P2</span>
+          <span class="demo-txt">
+            <span class="demo-title">Voice Barge-In Fix</span>
+            No, weight is 52.8 kilo and next visit is November 30
+          </span>
+        </button>
+
+        <button class="demo-btn" onclick="runPreset(2)" aria-label="Demo Preset 3: Newborn Danger Sign">
+          <span class="demo-num">P3</span>
+          <span class="demo-txt">
+            <span class="demo-title">⚠ Newborn Danger Sign</span>
+            Meena Kumari, ID ASHA-209, newborn 4 days old, magu tumba jwara high fever and not feeding
+          </span>
+        </button>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── 2. LIVE TRANSCRIPT ─── -->
+  <section class="card" aria-labelledby="transcriptTitle">
+    <div class="card-title">
+      <span class="icon">📝</span>
+      <span id="transcriptTitle">Live Transcript</span>
+    </div>
+
+    <div class="transcript-box empty" id="transcriptBox" role="region" aria-live="polite" aria-label="Live transcript output"></div>
+
+    <div class="barge-bar mt-2">
+      <button class="btn-barge" id="bargeBtn" disabled onclick="stopTTS()" aria-label="Barge-In: Stop speech">
+        ⏹ Barge-In / Interrupt
+      </button>
+      <span class="tts-status" id="ttsStatus">TTS idle</span>
+    </div>
+  </section>
+
+  <!-- ─── 3. DANGER ALERT ─── -->
+  <div class="danger-alert" id="dangerAlert" role="alert" aria-live="assertive">
+    <div class="alert-header">
+      <span style="font-size:1.5rem">⚠️</span>
+      <span class="alert-title">DANGER SIGN DETECTED — PHC REFERRAL ALERT</span>
+    </div>
+    <div class="alert-body">
+      Refer to PHC immediately. Record flagged <strong>HIGH PRIORITY.</strong>
+      <div class="alert-keywords" id="alertKeywords"></div>
+      <span class="nmh-ref">📋 Per NHM ASHA Module 6 &amp; 7 Guidelines — Rule-based keyword detection.</span>
+    </div>
+    <div class="guardrail-badge">
+      <span class="shield">🛡️</span>
+      <span><strong>Guardrail:</strong> Zero diagnosis or treatment advice. Refer immediately to trained medical personnel.</span>
+    </div>
+  </div>
+
+  <!-- ─── 4. STRUCTURED VISIT FORM ─── -->
+  <section class="card" aria-labelledby="formTitle">
+    <div class="card-title">
+      <span class="icon">📋</span>
+      <span id="formTitle">Structured Visit Record</span>
+    </div>
+
+    <div class="form-grid">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="benefName">Beneficiary Name</label>
+          <input class="form-input" id="benefName" type="text" placeholder="—" readonly />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="benefId">ASHA ID</label>
+          <input class="form-input" id="benefId" type="text" placeholder="—" readonly />
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="visitType">Visit Type</label>
+          <select class="form-select" id="visitType">
+            <option value="">— Select —</option>
+            <option value="ANC">ANC Checkup</option>
+            <option value="PNC">PNC Visit</option>
+            <option value="Newborn">Newborn Care</option>
+            <option value="Immunisation">Immunisation</option>
+            <option value="Routine">Routine Visit</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="visitMonth">Month / Week</label>
+          <input class="form-input" id="visitMonth" type="text" placeholder="—" readonly />
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="weightKg">Weight (kg)</label>
+          <input class="form-input" id="weightKg" type="text" placeholder="—" readonly />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="nextVisit">Next Visit Date</label>
+          <input class="form-input" id="nextVisit" type="text" placeholder="—" readonly />
+        </div>
+      </div>
+
+      <div class="form-group full">
+        <label class="form-label" for="vaccSupp">Vaccinations / Supplements</label>
+        <input class="form-input" id="vaccSupp" type="text" placeholder="—" readonly />
+      </div>
+
+      <div class="form-group full">
+        <label class="form-label" for="dangerNotes">Danger Sign Notes</label>
+        <input class="form-input" id="dangerNotes" type="text" placeholder="—" readonly />
+      </div>
+
+      <div class="priority-badge" id="priorityBadge">
+        🚨 HIGH PRIORITY RECORD — Flagged for PHC Referral
+      </div>
+
+      <div class="form-actions">
+        <button class="btn-primary" onclick="readFormAloud()" aria-label="Read form aloud using TTS">
+          🔊 Read Aloud
+        </button>
+        <button class="btn-secondary" onclick="saveRecord()" aria-label="Save this visit record">
+          💾 Save Record
+        </button>
+        <button class="btn-clear" onclick="clearAll()" aria-label="Clear all fields">
+          🗑
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── 5. NEXT ACTION QUEUE ─── -->
+  <section class="card" aria-labelledby="queueTitle">
+    <div class="card-title">
+      <span class="icon">📌</span>
+      <span id="queueTitle">Next-Action Queue</span>
+    </div>
+    <div class="queue-list" id="queueList">
+      <div class="queue-item">
+        <span class="q-icon">📞</span>
+        <span class="q-text">Follow up: Distribute IFA tablets at next visit</span>
+        <span class="q-badge pending">Pending</span>
+      </div>
+      <div class="queue-item">
+        <span class="q-icon">💉</span>
+        <span class="q-text">Schedule TT-2 vaccination reminder for Sunita Devi</span>
+        <span class="q-badge info">Scheduled</span>
+      </div>
+      <div class="queue-item">
+        <span class="q-icon">🏥</span>
+        <span class="q-text">Complete PHC monthly report submission</span>
+        <span class="q-badge pending">Pending</span>
+      </div>
+      <div class="queue-item">
+        <span class="q-icon">📋</span>
+        <span class="q-text">Update village register with today's visit data</span>
+        <span class="q-badge done">Done</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── 6. SAVED LOGS ─── -->
+  <section class="card" aria-labelledby="logsTitle">
+    <div class="card-title">
+      <span class="icon">🗂️</span>
+      <span id="logsTitle">Saved Visit Logs</span>
+      <span style="margin-left:auto;font-size:0.7rem;font-weight:600;background:var(--primary-xl);color:var(--primary);padding:2px 8px;border-radius:20px;" id="logCount">0 records</span>
+    </div>
+    <div class="log-list" id="logList">
+      <div class="empty-state" id="logEmpty">No saved records yet. Fill the form and tap Save Record.</div>
+    </div>
+  </section>
+
+</main>
+
+<!-- Toast -->
+<div id="toast" role="status" aria-live="polite"></div>
+
+<!-- ══════════════════════════════════════════════
+     JAVASCRIPT
+══════════════════════════════════════════════ -->
+<script>
+/* ════════════════════════════════════════════════
+   CONSTANTS & CONFIGURATION
+════════════════════════════════════════════════ */
+const MEDICAL_TERMS = [
+  { pattern: /\banc\s*checkup\b/gi,  label: 'ANC Checkup',   danger: false },
+  { pattern: /\btt\s*injection\b/gi, label: 'TT Injection',  danger: false },
+  { pattern: /\bifa\s*goli\b/gi,     label: 'IFA Goli',      danger: false },
+  { pattern: /\bifa\b/gi,            label: 'IFA',           danger: false },
+  { pattern: /\bifa\s*goli\s*kottidini\b/gi, label: 'IFA Goli Kottidini', danger: false },
+  { pattern: /\bhigh\s*fever\b/gi,   label: 'High Fever',    danger: true  },
+  { pattern: /\btumba\s*jwara\b/gi,  label: 'Tumba Jwara',   danger: true  },
+  { pattern: /\bjwara\b/gi,          label: 'Jwara',         danger: true  },
+  { pattern: /\bmagu\b/gi,           label: 'Magu',          danger: false },
+  { pattern: /\bpnc\b/gi,           label: 'PNC',            danger: false },
+  { pattern: /\bnewborn\b/gi,        label: 'Newborn',       danger: false },
+  { pattern: /\bblood\s*pressure\b/gi, label: 'Blood Pressure', danger: false },
+  { pattern: /\banchoraa\b/gi,       label: 'Anaemia',       danger: false },
+];
+
+const DANGER_KEYWORDS = [
+  { kw: /\bbleeding\b/i,       label: 'Bleeding' },
+  { kw: /\brakta\s*srava\b/i,  label: 'Rakta Srava' },
+  { kw: /\bhigh\s*fever\b/i,   label: 'High Fever' },
+  { kw: /\btumba\s*jwara\b/i,  label: 'Tumba Jwara' },
+  { kw: /\bjwara\b/i,          label: 'Jwara' },
+  { kw: /\bfits\b/i,           label: 'Fits / Seizures' },
+  { kw: /\bnot\s*feeding\b/i,  label: 'Not Feeding' },
+  { kw: /\bconvuls/i,          label: 'Convulsions' },
+  { kw: /\bunconscious\b/i,    label: 'Unconscious' },
+];
+
+const PRESETS = [
+  {
+    text: "Sunita Devi, ID ASHA-104, 7th month ANC checkup, weight 54 kilo, TT injection given, IFA goli kottidini, next visit November 28.",
+    form: {
+      benefName:  'Sunita Devi',
+      benefId:    'ASHA-104',
+      visitType:  'ANC',
+      visitMonth: '7th Month',
+      weightKg:   '54 kg',
+      nextVisit:  'November 28',
+      vaccSupp:   'TT Injection ✓, IFA Goli ✓',
+      dangerNotes: '—',
+      danger:     false,
+    }
+  },
+  {
+    text: "No, weight is 52.8 kilo and next visit is November 30.",
+    form: {
+      weightKg:  '52.8 kg',
+      nextVisit: 'November 30',
+      danger:    false,
+    },
+    patch: true,
+  },
+  {
+    text: "Meena Kumari, ID ASHA-209, newborn 4 days old, magu tumba jwara high fever and not feeding.",
+    form: {
+      benefName:  'Meena Kumari',
+      benefId:    'ASHA-209',
+      visitType:  'Newborn',
+      visitMonth: 'Newborn — Day 4',
+      weightKg:   '—',
+      nextVisit:  '—',
+      vaccSupp:   '—',
+      dangerNotes:'Tumba Jwara (High Fever), Not Feeding',
+      danger:     true,
+    }
+  }
+];
+
+/* ════════════════════════════════════════════════
+   STATE
+════════════════════════════════════════════════ */
+let isListening     = false;
+let recognition     = null;
+let ttsUtterance    = null;
+let isSpeaking      = false;
+let currentLang     = 'kn-IN';
+let savedLogs       = [];
+let animFrameId     = null;
+let analyser        = null;
+let audioCtx        = null;
+
+/* ════════════════════════════════════════════════
+   WAVEFORM DRAWING
+════════════════════════════════════════════════ */
+const canvas  = document.getElementById('waveCanvas');
+const ctx2d   = canvas.getContext('2d');
+
+function resizeCanvas() {
+  canvas.width  = canvas.offsetWidth * window.devicePixelRatio;
+  canvas.height = canvas.offsetHeight * window.devicePixelRatio;
+  ctx2d.scale(window.devicePixelRatio, window.devicePixelRatio);
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+function drawIdle() {
+  const W = canvas.offsetWidth, H = canvas.offsetHeight;
+  ctx2d.clearRect(0, 0, W, H);
+  ctx2d.strokeStyle = '#0D5C63';
+  ctx2d.lineWidth   = 2;
+  ctx2d.beginPath();
+  ctx2d.moveTo(0, H / 2);
+  ctx2d.lineTo(W, H / 2);
+  ctx2d.stroke();
+}
+
+function drawLiveWave() {
+  if (!analyser) { drawDemoWave(); return; }
+  const bufLen = analyser.frequencyBinCount;
+  const data   = new Uint8Array(bufLen);
+  analyser.getByteTimeDomainData(data);
+  const W = canvas.offsetWidth, H = canvas.offsetHeight;
+  ctx2d.clearRect(0, 0, W, H);
+  ctx2d.strokeStyle = isListening ? '#DC2626' : '#0D5C63';
+  ctx2d.lineWidth   = 2.5;
+  ctx2d.beginPath();
+  const sliceW = W / bufLen;
+  let x = 0;
+  for (let i = 0; i < bufLen; i++) {
+    const v = data[i] / 128.0;
+    const y = (v * H) / 2;
+    i === 0 ? ctx2d.moveTo(x, y) : ctx2d.lineTo(x, y);
+    x += sliceW;
+  }
+  ctx2d.lineTo(W, H / 2);
+  ctx2d.stroke();
+  animFrameId = requestAnimationFrame(drawLiveWave);
+}
+
+let demoWaveT = 0;
+function drawDemoWave() {
+  if (!isListening) return;
+  demoWaveT += 0.08;
+  const W = canvas.offsetWidth, H = canvas.offsetHeight;
+  ctx2d.clearRect(0, 0, W, H);
+  ctx2d.strokeStyle = '#DC2626';
+  ctx2d.lineWidth   = 2.5;
+  ctx2d.beginPath();
+  for (let x = 0; x <= W; x += 2) {
+    const t  = (x / W) * Math.PI * 8 + demoWaveT;
+    const amp = (H * 0.35) * (0.5 + 0.5 * Math.sin(demoWaveT * 1.3));
+    const y  = H / 2 + amp * Math.sin(t);
+    x === 0 ? ctx2d.moveTo(x, y) : ctx2d.lineTo(x, y);
+  }
+  ctx2d.stroke();
+  animFrameId = requestAnimationFrame(drawDemoWave);
+}
+
+drawIdle();
+
+/* ════════════════════════════════════════════════
+   LANGUAGE SELECTOR
+════════════════════════════════════════════════ */
+function setLanguage(lang) {
+  currentLang = lang;
+  if (recognition) {
+    recognition.lang = lang;
+  }
+  showToast('Language set: ' + document.getElementById('langSelector').selectedOptions[0].text);
+}
+
+/* ════════════════════════════════════════════════
+   SPEECH RECOGNITION (MIC)
+════════════════════════════════════════════════ */
+function toggleMic() {
+  if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+    showToast('⚠ Speech API not supported — use Demo Presets below.');
+    return;
+  }
+  if (isListening) {
+    stopMic();
+  } else {
+    startMic();
+  }
+}
+
+function startMic() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  recognition = new SR();
+  recognition.lang           = currentLang;
+  recognition.continuous     = true;
+  recognition.interimResults = true;
+
+  recognition.onstart = () => {
+    isListening = true;
+    updateMicUI(true);
+    setupAudioAnalyser();
+    animFrameId && cancelAnimationFrame(animFrameId);
+    drawLiveWave();
+  };
+
+  recognition.onresult = (event) => {
+    let final = '', interim = '';
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const t = event.results[i][0].transcript;
+      event.results[i].isFinal ? final += t : interim += t;
+    }
+    updateLatency();
+    if (final) {
+      processTranscript(final.trim());
+    } else if (interim) {
+      showInterim(interim);
+    }
+  };
+
+  recognition.onerror = (e) => {
+    if (e.error !== 'no-speech') showToast('⚠ Mic error: ' + e.error);
+    stopMic();
+  };
+  recognition.onend = () => stopMic();
+
+  try { recognition.start(); }
+  catch(e) { showToast('⚠ Could not start mic: ' + e.message); }
+}
+
+function stopMic() {
+  isListening = false;
+  updateMicUI(false);
+  if (recognition) { try { recognition.stop(); } catch(e){} }
+  cancelAnimationFrame(animFrameId);
+  drawIdle();
+  if (audioCtx) { try { audioCtx.close(); } catch(e){} audioCtx = null; analyser = null; }
+}
+
+function updateMicUI(listening) {
+  const btn   = document.getElementById('micBtn');
+  const icon  = document.getElementById('micIcon');
+  const label = document.getElementById('micLabel');
+  if (listening) {
+    btn.classList.add('listening');
+    icon.textContent  = '⏹';
+    label.textContent = 'Listening…';
+    btn.setAttribute('aria-label', 'Tap to Stop');
+  } else {
+    btn.classList.remove('listening');
+    icon.textContent  = '🎤';
+    label.textContent = 'Tap to Speak';
+    btn.setAttribute('aria-label', 'Tap to Speak');
+  }
+}
+
+function setupAudioAnalyser() {
+  if (!navigator.mediaDevices) return;
+  navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 512;
+    audioCtx.createMediaStreamSource(stream).connect(analyser);
+  }).catch(() => {});
+}
+
+function updateLatency() {
+  const ms = 280 + Math.floor(Math.random() * 180);
+  document.getElementById('latencyVal').textContent = ms + 'ms';
+}
+
+/* ════════════════════════════════════════════════
+   DEMO PRESETS
+════════════════════════════════════════════════ */
+function runPreset(idx) {
+  stopMic();
+  stopTTS();
+  cancelAnimationFrame(animFrameId);
+
+  const preset = PRESETS[idx];
+
+  // Animate waveform for realism
+  isListening = true;
+  animFrameId && cancelAnimationFrame(animFrameId);
+  drawDemoWave();
+
+  setTimeout(() => {
+    isListening = false;
+    cancelAnimationFrame(animFrameId);
+    drawIdle();
+    processTranscript(preset.text, preset);
+  }, 1200);
+
+  showToast('▶ Running Preset ' + (idx + 1) + '…');
+}
+
+/* ════════════════════════════════════════════════
+   TRANSCRIPT PROCESSING
+════════════════════════════════════════════════ */
+function processTranscript(text, preset) {
+  renderTranscript(text);
+  const dangerFound = checkDanger(text);
+  fillForm(preset, dangerFound);
+  if (dangerFound) {
+    speakAlert();
+  } else {
+    speakTranscript(text);
+  }
+  updateQueueOnDanger(dangerFound, preset);
+}
+
+function showInterim(text) {
+  const box = document.getElementById('transcriptBox');
+  box.classList.remove('empty');
+  box.innerHTML = '<span class="interim">🎙 ' + escapeHtml(text) + '…</span>';
+}
+
+function renderTranscript(text) {
+  const box = document.getElementById('transcriptBox');
+  box.classList.remove('empty');
+  let html = escapeHtml(text);
+
+  // Highlight danger terms first (order matters)
+  DANGER_KEYWORDS.forEach(d => {
+    html = html.replace(d.kw, m =>
+      '<span class="med-pill danger-term" title="NHM Danger Sign Keyword" aria-label="Danger sign: ' + d.label + '">' + m + '</span>'
+    );
+  });
+
+  // Highlight medical terms
+  MEDICAL_TERMS.forEach(mt => {
+    html = html.replace(mt.pattern, m =>
+      mt.danger
+        ? m  // already highlighted above
+        : '<span class="med-pill" title="Medical term detected" aria-label="Medical term: ' + mt.label + '">' + m + '</span>'
+    );
+  });
+
+  box.innerHTML = html;
+}
+
+/* ════════════════════════════════════════════════
+   DANGER SIGN DETECTION (RULE-BASED)
+════════════════════════════════════════════════ */
+function checkDanger(text) {
+  const found = DANGER_KEYWORDS.filter(d => d.kw.test(text));
+  const alert = document.getElementById('dangerAlert');
+  const kwBox  = document.getElementById('alertKeywords');
+
+  if (found.length > 0) {
+    kwBox.innerHTML = found.map(d =>
+      '<span class="alert-kw">⚠ ' + d.label + '</span>'
+    ).join('');
+    alert.classList.add('visible');
+    return true;
+  } else {
+    alert.classList.remove('visible');
+    return false;
+  }
+}
+
+/* ════════════════════════════════════════════════
+   FORM AUTO-FILL
+════════════════════════════════════════════════ */
+function fillForm(preset, isDanger) {
+  if (!preset || !preset.form) {
+    // Try naive NLP from free text transcript
+    return;
+  }
+  const f = preset.form;
+
+  const setField = (id, val, clear) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (val !== undefined && val !== null) {
+      if (el.tagName === 'SELECT') {
+        for (let opt of el.options) { if (opt.value === val) { el.value = val; break; } }
+        el.classList.toggle('filled', el.value !== '');
+      } else {
+        if (clear || el.value === '' || el.value === '—') {
+          el.value = val;
+        } else {
+          // Patch mode — overwrite
+          el.value = val;
+        }
+        el.classList.toggle('filled', val !== '' && val !== '—');
+      }
+    }
+  };
+
+  if (!preset.patch) {
+    // Clear form first on non-patch presets
+    clearForm(false);
+  }
+
+  if (f.benefName  !== undefined) setField('benefName',  f.benefName);
+  if (f.benefId    !== undefined) setField('benefId',    f.benefId);
+  if (f.visitType  !== undefined) setField('visitType',  f.visitType);
+  if (f.visitMonth !== undefined) setField('visitMonth', f.visitMonth);
+  if (f.weightKg   !== undefined) setField('weightKg',   f.weightKg);
+  if (f.nextVisit  !== undefined) setField('nextVisit',  f.nextVisit);
+  if (f.vaccSupp   !== undefined) setField('vaccSupp',   f.vaccSupp);
+  if (f.dangerNotes!== undefined) setField('dangerNotes', f.dangerNotes);
+
+  const badge = document.getElementById('priorityBadge');
+  badge.classList.toggle('visible', isDanger || (f.danger === true));
+}
+
+function clearForm(resetAll = true) {
+  const fields = ['benefName','benefId','visitMonth','weightKg','nextVisit','vaccSupp','dangerNotes'];
+  fields.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.value = ''; el.classList.remove('filled'); }
+  });
+  if (resetAll) {
+    document.getElementById('visitType').value = '';
+    document.getElementById('visitType').classList.remove('filled');
+    document.getElementById('priorityBadge').classList.remove('visible');
+    document.getElementById('dangerAlert').classList.remove('visible');
+    document.getElementById('transcriptBox').innerHTML = '';
+    document.getElementById('transcriptBox').classList.add('empty');
+  }
+}
+
+/* ════════════════════════════════════════════════
+   TEXT-TO-SPEECH
+════════════════════════════════════════════════ */
+function speak(text, onEnd) {
+  stopTTS();
+  if (!('speechSynthesis' in window)) return;
+  ttsUtterance = new SpeechSynthesisUtterance(text);
+  ttsUtterance.lang = currentLang;
+  ttsUtterance.rate = 0.9;
+  ttsUtterance.pitch = 1;
+
+  ttsUtterance.onstart = () => {
+    isSpeaking = true;
+    document.getElementById('bargeBtn').disabled   = false;
+    document.getElementById('ttsStatus').textContent = '🔊 Speaking…';
+  };
+  ttsUtterance.onend = ttsUtterance.onerror = () => {
+    isSpeaking = false;
+    document.getElementById('bargeBtn').disabled   = true;
+    document.getElementById('ttsStatus').textContent = 'TTS idle';
+    if (onEnd) onEnd();
+  };
+
+  speechSynthesis.speak(ttsUtterance);
+}
+
+function stopTTS() {
+  if ('speechSynthesis' in window) {
+    speechSynthesis.cancel();
+  }
+  isSpeaking = false;
+  document.getElementById('bargeBtn').disabled   = true;
+  document.getElementById('ttsStatus').textContent = 'TTS stopped';
+  setTimeout(() => {
+    document.getElementById('ttsStatus').textContent = 'TTS idle';
+  }, 1500);
+}
+
+function speakTranscript(text) {
+  speak('Transcript recorded. ' + text);
+}
+
+function speakAlert() {
+  const alertText =
+    'DANGER SIGN DETECTED. Please refer beneficiary to PHC immediately. ' +
+    'This record has been flagged HIGH PRIORITY. ' +
+    'Per NHM ASHA Module guidelines, do not attempt diagnosis or treatment. Report to your ASHA supervisor now.';
+  speak(alertText);
+}
+
+function readFormAloud() {
+  const name   = document.getElementById('benefName').value  || 'Unknown';
+  const id     = document.getElementById('benefId').value    || 'Unknown';
+  const vtype  = document.getElementById('visitType').value  || 'Not specified';
+  const month  = document.getElementById('visitMonth').value || '';
+  const weight = document.getElementById('weightKg').value   || 'Not recorded';
+  const next   = document.getElementById('nextVisit').value  || 'Not scheduled';
+  const vacc   = document.getElementById('vaccSupp').value   || 'None';
+  const danger = document.getElementById('dangerNotes').value|| 'None';
+
+  const script =
+    `Visit record for ${name}, ASHA ID ${id}. ` +
+    `Visit type: ${vtype}${month ? ', ' + month : ''}. ` +
+    `Weight: ${weight}. ` +
+    `Vaccinations and supplements: ${vacc}. ` +
+    `Danger signs: ${danger}. ` +
+    `Next visit scheduled: ${next}.`;
+
+  speak(script);
+}
+
+/* ════════════════════════════════════════════════
+   SAVE RECORD
+════════════════════════════════════════════════ */
+function saveRecord() {
+  const name    = document.getElementById('benefName').value;
+  const id      = document.getElementById('benefId').value;
+  const vtype   = document.getElementById('visitType').value;
+  const weight  = document.getElementById('weightKg').value;
+  const next    = document.getElementById('nextVisit').value;
+  const vacc    = document.getElementById('vaccSupp').value;
+  const danger  = document.getElementById('dangerNotes').value;
+  const isHigh  = document.getElementById('priorityBadge').classList.contains('visible');
+
+  if (!name && !id) {
+    showToast('⚠ No data to save — run a preset or speak first.');
+    return;
+  }
+
+  const record = {
+    id: 'REC-' + Date.now(),
+    timestamp: new Date().toLocaleString('en-IN'),
+    name:   name   || '—',
+    ashaId: id     || '—',
+    visit:  vtype  || '—',
+    weight: weight || '—',
+    next:   next   || '—',
+    vacc:   vacc   || '—',
+    danger: danger || '—',
+    high:   isHigh,
+  };
+
+  savedLogs.unshift(record);
+  renderLogs();
+  showToast('✅ Record saved — ' + record.name);
+  speak('Record saved for ' + record.name + '. ' + (isHigh ? 'This is a HIGH PRIORITY record.' : ''));
+
+  // Add to queue
+  if (isHigh) {
+    addQueueItem('🚨', 'PHC Referral: ' + record.name + ' (' + record.ashaId + ')', 'urgent');
+  } else {
+    addQueueItem('✅', 'Visit saved: ' + record.name + ' — Next: ' + record.next, 'done');
+  }
+}
+
+function renderLogs() {
+  const list  = document.getElementById('logList');
+  const empty = document.getElementById('logEmpty');
+  const count = document.getElementById('logCount');
+  count.textContent = savedLogs.length + ' record' + (savedLogs.length !== 1 ? 's' : '');
+
+  if (savedLogs.length === 0) {
+    empty.style.display = 'block';
+    // remove all log items
+    list.querySelectorAll('.log-item').forEach(el => el.remove());
+    return;
+  }
+  empty.style.display = 'none';
+  list.querySelectorAll('.log-item').forEach(el => el.remove());
+
+  savedLogs.forEach(r => {
+    const div = document.createElement('div');
+    div.className = 'log-item' + (r.high ? ' high-priority' : '');
+    div.innerHTML = `
+      <div class="log-top">
+        <span class="log-name">${escapeHtml(r.name)}</span>
+        <span class="log-ts">${escapeHtml(r.timestamp)}</span>
+        ${r.high ? '<span class="log-flag">⚠ HIGH</span>' : ''}
+      </div>
+      <div class="log-meta">
+        🆔 ${escapeHtml(r.ashaId)} · ${escapeHtml(r.visit)} · ⚖ ${escapeHtml(r.weight)} · 📅 ${escapeHtml(r.next)}
+      </div>
+      ${r.vacc !== '—' ? `<div class="log-meta">💊 ${escapeHtml(r.vacc)}</div>` : ''}
+      ${r.danger !== '—' ? `<div class="log-meta" style="color:var(--danger)">⚠ ${escapeHtml(r.danger)}</div>` : ''}
+    `;
+    list.appendChild(div);
+  });
+}
+
+/* ════════════════════════════════════════════════
+   QUEUE MANAGEMENT
+════════════════════════════════════════════════ */
+function addQueueItem(icon, text, badge) {
+  const list = document.getElementById('queueList');
+  const div  = document.createElement('div');
+  div.className = 'queue-item';
+  div.innerHTML = `
+    <span class="q-icon">${icon}</span>
+    <span class="q-text">${escapeHtml(text)}</span>
+    <span class="q-badge ${badge}">${badge.charAt(0).toUpperCase() + badge.slice(1)}</span>
+  `;
+  list.insertBefore(div, list.firstChild);
+}
+
+function updateQueueOnDanger(isDanger, preset) {
+  if (isDanger && preset && preset.form && preset.form.benefName) {
+    addQueueItem('🚨', 'URGENT: Refer ' + preset.form.benefName + ' to PHC immediately!', 'urgent');
+  }
+}
+
+/* ════════════════════════════════════════════════
+   CLEAR ALL
+════════════════════════════════════════════════ */
+function clearAll() {
+  stopMic();
+  stopTTS();
+  clearForm(true);
+  showToast('Form cleared');
+}
+
+/* ════════════════════════════════════════════════
+   TOAST
+════════════════════════════════════════════════ */
+let toastTimer;
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
+}
+
+/* ════════════════════════════════════════════════
+   UTILS
+════════════════════════════════════════════════ */
+function escapeHtml(str) {
+  if (!str) return '';
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/* ════════════════════════════════════════════════
+   INIT
+════════════════════════════════════════════════ */
+(function init() {
+  renderLogs();
+  drawIdle();
+
+  // Latency simulation ticker
+  setInterval(() => {
+    if (isListening) {
+      const ms = 260 + Math.floor(Math.random() * 220);
+      document.getElementById('latencyVal').textContent = ms + 'ms';
+    }
+  }, 2000);
+
+  // Welcome message
+  setTimeout(() => {
+    showToast('👋 ASHA-Vaani ready — tap mic or use demo presets');
+  }, 600);
+})();
+</script>
+</body>
+</html>
+
