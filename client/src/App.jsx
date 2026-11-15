@@ -45,7 +45,7 @@ const BENEFICIARIES = [
 ];
 
 // ── Desktop telemetry card ───────────────────────────────────────────────────
-function DesktopTelemetry({ vadStatus, ttfa, bargeInActive, connected, isRecording }) {
+function DesktopTelemetry({ vadStatus, ttfa, bargeInActive, connected, isRecording, connectionMode = 'websocket' }) {
   const rows = [
     {
       icon: Activity,
@@ -77,7 +77,7 @@ function DesktopTelemetry({ vadStatus, ttfa, bargeInActive, connected, isRecordi
     {
       icon: connected ? Wifi : WifiOff,
       label: 'Gateway Sync',
-      value: connected ? 'Online' : 'Offline',
+      value: connected ? (connectionMode === 'edge' ? 'Cloud Edge' : 'Online (WS)') : 'Offline',
       color: connected ? 'text-emerald-600' : 'text-crimson-600',
     },
   ];
@@ -185,7 +185,7 @@ export default function App() {
     }
   }, []);
 
-  const { connected, send } = useWebSocket(handleMessage);
+  const { connected, connectionMode, send } = useWebSocket(handleMessage, record);
 
   // ── Speech Recognition ────────────────────────────────────────────────────
   const onInterim = useCallback(text => setCaptionText(text), []);
@@ -263,6 +263,7 @@ export default function App() {
         ttfa={ttfa}
         bargeInActive={bargeInActive}
         connected={connected}
+        connectionMode={connectionMode}
       />
 
       {/* Spacer for sticky top pill */}
@@ -321,7 +322,7 @@ export default function App() {
                 <span className={`w-2 h-2 rounded-full mr-1.5 flex-shrink-0 ${
                   connected ? 'bg-emerald-400 animate-pulse' : 'bg-crimson-400'
                 }`} />
-                <span>{connected ? 'Online' : 'Offline'}</span>
+                <span>{connected ? (connectionMode === 'edge' ? 'Online (Edge)' : 'Online') : 'Offline'}</span>
               </div>
             </div>
           </div>
@@ -416,6 +417,7 @@ export default function App() {
                 ttfa={ttfa}
                 bargeInActive={bargeInActive}
                 connected={connected}
+                connectionMode={connectionMode}
                 isRecording={isRecording}
               />
             </div>

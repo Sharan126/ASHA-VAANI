@@ -12,6 +12,10 @@
       "destination": "/api/beneficiaries"
     },
     {
+      "source": "/api/process-transcript",
+      "destination": "/api/process-transcript"
+    },
+    {
       "source": "/((?!api/|health).*)",
       "destination": "/index.html"
     }

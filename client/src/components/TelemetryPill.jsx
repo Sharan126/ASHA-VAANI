@@ -8,7 +8,7 @@ const VAD_STYLES = {
   IDLE:      { dot: 'bg-slate-400',   label: 'Idle',     text: 'text-slate-300' },
 };
 
-export function TelemetryPill({ vadStatus, ttfa, bargeInActive, connected }) {
+export function TelemetryPill({ vadStatus, ttfa, bargeInActive, connected, connectionMode = 'websocket' }) {
   const vad = VAD_STYLES[vadStatus] || VAD_STYLES.IDLE;
 
   return (
@@ -50,7 +50,7 @@ export function TelemetryPill({ vadStatus, ttfa, bargeInActive, connected }) {
             {connected ? (
               <span className="flex items-center gap-1 text-emerald-400 font-semibold">
                 <Wifi className="icon-scalable" style={{ width: '1.1em', height: '1.1em' }} strokeWidth={2} />
-                <span className="hidden md:inline">Connected</span>
+                <span className="hidden md:inline">{connectionMode === 'edge' ? 'Cloud Edge' : 'Connected'}</span>
               </span>
             ) : (
               <span className="flex items-center gap-1 text-crimson-400 font-semibold">
